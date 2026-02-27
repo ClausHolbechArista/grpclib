@@ -2,6 +2,7 @@ import ssl
 import asyncio
 import tempfile
 import contextlib
+import socket
 from unittest.mock import patch, ANY
 
 import pytest
@@ -107,3 +108,39 @@ async def test_no_ssl_support():
         with pytest.raises(RuntimeError) as err:
             Channel(ssl=True)
         err.match("SSL is not supported")
+
+
+@pytest.mark.asyncio
+async def test_socket_parameter():
+    from unittest.mock import Mock
+
+    # Create a mock socket that tracks method calls
+    mock_sock = Mock(spec=socket.socket)
+    mock_sock.getpeername = Mock(return_value=("127.0.0.1", 12345))
+
+    # Mock the transport and protocol creation
+    mock_transport = Mock()
+    mock_protocol = Mock()
+
+    async def tracked_create_connection(_protocol_factory, **kwargs):
+        # Verify socket is passed and host/port are not passed
+        assert kwargs.get("sock") is mock_sock
+        assert "host" not in kwargs
+        assert "port" not in kwargs
+        return mock_transport, mock_protocol
+
+    with patch.object(
+        asyncio.get_event_loop(),
+        "create_connection",
+        side_effect=tracked_create_connection,
+    ):
+        channel = Channel(socket=mock_sock)
+        await channel.__connect__()
+        channel.close()
+
+
+def test_socket_conflicts():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        with pytest.raises(ValueError) as err:
+            Channel(host="localhost", socket=sock)
+        err.match("The 'socket' parameter can not be used")

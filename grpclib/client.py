@@ -5,6 +5,7 @@ import time
 import asyncio
 import warnings
 import ipaddress
+import socket
 
 from types import TracebackType
 from typing import Generic, Optional, Union, Type, List, Sequence, Any, cast
@@ -625,6 +626,7 @@ class Channel:
         ssl: Union[
             None, bool, "_ssl.SSLContext", "_ssl.DefaultVerifyPaths"
         ] = None,
+        socket: Optional[socket.socket] = None,
         config: Optional[Configuration] = None,
     ):
         """Initialize connection to the server
@@ -648,8 +650,14 @@ class Channel:
         :param ssl: ``True`` or :py:class:`~python:ssl.SSLContext` object or
             ``ssl.DefaultVerifyPaths`` object; if ``True``, default SSL context
             is used.
+
+        :param socket: socket object to use for the connection. If specified,
+            host, port and path should be omitted (must be None).
         """
-        if path is not None and (host is not None or port is not None):
+        if socket is not None and (host is not None or port is not None or path is not None):
+            raise ValueError("The 'socket' parameter can not be used with the "
+                             "'host', 'port' or 'path' parameters.")
+        elif path is not None and (host is not None or port is not None):
             raise ValueError("The 'path' parameter can not be used with the "
                              "'host' or 'port' parameters.")
         else:
@@ -681,6 +689,7 @@ class Channel:
         self._port = port
         self._loop = loop or asyncio.get_event_loop()
         self._path = path
+        self._socket = socket
         self._codec = codec
         self._status_details_codec = status_details_codec
         self._ssl = ssl or None
@@ -711,15 +720,21 @@ class Channel:
         return H2Protocol(Handler(), self._config, self._h2_config)
 
     async def _create_connection(self) -> H2Protocol:
+        server_hostname = self._config.ssl_target_name_override if self._ssl is not None else None
         if self._path is not None:
             _, protocol = await self._loop.create_unix_connection(
                 self._protocol_factory,
                 self._path,
                 ssl=self._ssl,
-                server_hostname=(
-                    self._config.ssl_target_name_override
-                    if self._ssl is not None else None
-                ),
+                server_hostname=server_hostname,
+            )
+        elif self._socket is not None:
+            _, protocol = await self._loop.create_connection(
+                self._protocol_factory,
+                
+                ssl=self._ssl,
+                server_hostname=server_hostname,
+                sock=self._socket,
             )
         else:
             _, protocol = await self._loop.create_connection(
@@ -727,10 +742,7 @@ class Channel:
                 self._host,
                 self._port,
                 ssl=self._ssl,
-                server_hostname=(
-                    self._config.ssl_target_name_override
-                    if self._ssl is not None else None
-                ),
+                server_hostname=server_hostname,
             )
         return protocol
 
