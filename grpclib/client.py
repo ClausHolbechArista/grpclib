@@ -723,7 +723,9 @@ class Channel:
 
     async def _create_connection(self) -> H2Protocol:
         server_hostname = (
-            self._config.ssl_target_name_override if self._ssl is not None else None
+            self._config.ssl_target_name_override
+            if self._ssl is not None
+            else None
         )
         if self._path is not None:
             _, protocol = await self._loop.create_unix_connection(
