@@ -654,7 +654,9 @@ class Channel:
         :param socket: socket object to use for the connection. If specified,
             host, port and path should be omitted (must be None).
         """
-        if socket is not None and (host is not None or port is not None or path is not None):
+        if socket is not None and (
+            host is not None or port is not None or path is not None
+        ):
             raise ValueError("The 'socket' parameter can not be used with the "
                              "'host', 'port' or 'path' parameters.")
         elif path is not None and (host is not None or port is not None):
@@ -720,7 +722,9 @@ class Channel:
         return H2Protocol(Handler(), self._config, self._h2_config)
 
     async def _create_connection(self) -> H2Protocol:
-        server_hostname = self._config.ssl_target_name_override if self._ssl is not None else None
+        server_hostname = (
+            self._config.ssl_target_name_override if self._ssl is not None else None
+        )
         if self._path is not None:
             _, protocol = await self._loop.create_unix_connection(
                 self._protocol_factory,
@@ -731,7 +735,7 @@ class Channel:
         elif self._socket is not None:
             _, protocol = await self._loop.create_connection(
                 self._protocol_factory,
-                
+
                 ssl=self._ssl,
                 server_hostname=server_hostname,
                 sock=self._socket,
